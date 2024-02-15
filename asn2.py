@@ -134,7 +134,10 @@ class Robot:
 
         self.port = 4
         self.sensor_scale = float(15.0/2350)
+        self.all_sides = ["left", "front", "right"]
 
+        # for clarification purposes, not used
+        self.directions = {0: "South", 1: "West", 2: "North", 3: "East"}
         self.position = [0, 0, 0]
         self.width = 11.2 # cm
         self.map = EECSMap()
@@ -166,8 +169,72 @@ class Robot:
 
         setMotorWheelSpeedSync(ids, vals)
 
-    def move_to(self, i, j, k): 
-        pass
+    
+    def move_forward_by(self, speed, grid):
+        self.move_forward(900)
+        time.sleep(grid * 2.1)
+        self.stop_wheels()        
+
+
+    
+
+    def move_to_grid(self, start, end): 
+        # given a start and end grid, move there
+        start_x, end_x = start[0], end[0]
+        start_y, end_y = start[1], end[1]
+
+        dx, dy = (end_x - start_x), (end_y - start_y)
+
+        if (dx == -1):
+            # move in x direction by 1  
+            if (self.position[2] == 2):
+                self.left_turn(90, 900)
+            elif (self.position[2] == 0):
+                self.right_turn(90, 900)
+
+            self.move_forward_by(900, 1)
+        
+        elif (dx == 1):
+            if (self.position[2] == 0):
+                self.left_turn(90, 900)
+            elif (self.position[2] == 2):
+                self.right_turn(90, 900)
+
+            self.move_forward_by(900, 1)
+
+        elif (dy == -1):
+            if (self.position[2] == 3):
+                self.left_turn(90, 900)
+            elif (self.position[2] == 1):
+                self.right_turn(90, 900)
+            self.move_forward_by(900, 1)
+        
+        elif (dy == 1):
+            if (self.position[2] == 1):
+                self.left_turn(90, 900)
+            elif (self.position[2] == 3):
+                self.right_turn(90, 900)
+            self.move_forward_by(900, 1)
+
+
+
+
+    def change_heading(self, direction):
+        # change heading for 90 deg turns only
+        if (direction == "left"):
+            # if facing south, decrement by 1 (wrap around) to face east
+            if (self.position[2] == 0):
+                self.position[2] = 3
+            else:
+                self.position[2] -= 1
+
+        if (direction == "right"):
+            # if facing east, increment by 1 (wrap around) to face south
+            if (self.position[2] == 3):
+                self.position[2] = 0
+            else:
+                self.position[2] += 1            
+
 
     
     def right_turn(self, turn_amount, speed):
@@ -175,7 +242,7 @@ class Robot:
         turn_amount = turn_amount * 3.1415926535897932384626433832795/180
         speed_scale = float(10)/float(900) # convert to cm/s
         r = self.width/2
-        error_scale = float(90)/float(148)
+        error_scale = float(90)/float(152)
         t = turn_amount * r / (float(speed) * speed_scale) * error_scale
         print(t)
         ids = [self.ID["right wheel"], self.ID["left wheel"]]
@@ -184,12 +251,15 @@ class Robot:
         time.sleep(t)
         self.stop_wheels()
 
+        # change postion vector
+        self.change_heading("right")
+
     def left_turn(self, turn_amount, speed):
         self.stop_wheels()
         turn_amount = turn_amount * 3.1415926535897932384626433832795/180
         speed_scale = float(10)/float(900) # convert to cm/s
         r = self.width/2
-        error_scale = float(90)/float(148)
+        error_scale = float(90)/float(152)
         t = turn_amount * r / (float(speed) * speed_scale) * error_scale
         print(t)
         ids = [self.ID["left wheel"], self.ID["right wheel"]]
@@ -197,6 +267,9 @@ class Robot:
         setMotorWheelSpeedSync(ids, vals)
         time.sleep(t)
         self.stop_wheels()
+
+        # change postion vector
+        self.change_heading("left")
 
     def move_to(self, position): 
         motor_ID = self.ID["motor sensor"]
@@ -235,44 +308,50 @@ class Robot:
         if (side == "front"):
             self.move_to(0)
         elif (side == "right"):
-            self.move_to(520)
+            self.move_to(512)
         else:
             self.move_to(1023)
+        time.sleep(0.5)
+        return getSensorValue(self.port)
+
+    # def nearest_wall(self):
+    #     shortest = 12232
+    #     for i in self.all_sides:
+    #         reading = self.get_reading(i)
+    #         if 
+
 
         
-    # def wall(self):
-    #     THRESHOLD = 3 # cm
+    def wall(self):
+        THRESHOLD = 3 # cm
 
-    #     def check_error():
+        def check_error():
 
-    #         # read sensor
-    #         # sensor_reading = getSensorValue(self.port)
-    #         # print(wall_sensor_reading)
-    #         # error = wall_sensor_reading * scale - THRESHOLD # cm
-    #         # print(error)
+            # read sensor
+            get_reading(self, side)
 
-    #         # # reactive control
+            # # reactive control
 
-    #         # if ((sensor_reading * 15.0/145 - THRESHOLD) > 1):
-    #         #     other_wall_sensor_reading = getSensorValue(other_wall_sensor)
-    #         #     # all sides blocked
-    #         #     if ((other_wall_sensor_reading * other_scale - THRESHOLD) > 1 and (error > 1)):
-    #         #         self.left_turn_180()
-    #         #         print("All sides blocked, turning 180!")
-    #         #     # wall_sensor blocked
-    #         #     elif (error > 1):
-    #         #         print("2 sides blocked, turning 90!")
-    #         #         if (wall_side == "right"):
-    #         #             self.left_turn_90()
-    #         #         else:
-    #         #             self.right_turn_90()
-    #         #     # other sensor blocked
-    #         #     elif ((other_wall_sensor_reading * other_scale - THRESHOLD) > 1):
-    #         #         print("2 sides blocked, turning 90!")
-    #         #         if (wall_side == "left"):
-    #         #             self.left_turn_90()
-    #         #         else:
-    #         #             self.right_turn_90()
+            # if ((sensor_reading * 15.0/145 - THRESHOLD) > 1):
+            #     other_wall_sensor_reading = getSensorValue(other_wall_sensor)
+            #     # all sides blocked
+            #     if ((other_wall_sensor_reading * other_scale - THRESHOLD) > 1 and (error > 1)):
+            #         self.left_turn_180()
+            #         print("All sides blocked, turning 180!")
+            #     # wall_sensor blocked
+            #     elif (error > 1):
+            #         print("2 sides blocked, turning 90!")
+            #         if (wall_side == "right"):
+            #             self.left_turn_90()
+            #         else:
+            #             self.right_turn_90()
+            #     # other sensor blocked
+            #     elif ((other_wall_sensor_reading * other_scale - THRESHOLD) > 1):
+            #         print("2 sides blocked, turning 90!")
+            #         if (wall_side == "left"):
+            #             self.left_turn_90()
+            #         else:
+            #             self.right_turn_90()
 
         
 
@@ -302,9 +381,15 @@ class Robot:
         return None
 
     def test1(self):
-        self.move_forward(900)
-        time.sleep(9)
-        self.stop_wheels()
+        self.move_forward_by(900, 1)
+        self.move_forward_by(900, 1)
+        self.move_forward_by(900, 1)
+
+    def test2(self):
+        self.left_turn(90, 900)
+        self.move_forward_by(900, 1)
+        self.move_forward_by(900, 1)
+        self.move_forward_by(900, 1)
 
 
 
@@ -317,11 +402,11 @@ if __name__ == "__main__":
     rospy.loginfo("Starting Group X Control Node...")
     robot = Robot()
     robot.default_config()
-    # robot.map.printObstacleMap()
+    robot.map.printObstacleMap()
     # robot.map.printCostMap()
     robot.create_adjacency_list()
     # print(robot.bfs([0,0,0], [7,5,0]))
-    print(robot.bfs([0,0,0], [4,7,0]))
+    #print(robot.bfs([0,0,0], [4,7,0]))
 
     #robot.move_forward(900)
     #robot.move_backward(400)
@@ -330,10 +415,51 @@ if __name__ == "__main__":
     #robot.stop_wheels()
     #robot.get_reading("front")
     #robot.get_reading("left")
-    robot.get_reading("front")
-    time.sleep(2)
-    robot.get_reading("left")
+    # robot.get_reading("front")
+    # time.sleep(2)
+    # robot.get_reading("left")
+    #robot.test1()
+# code
+    # start = list(input("Enter start (no space comma separated:)"))
+    # print(start)
+    # start[0], start[1] = start[1], start[0]
+    # robot.position = start
 
+    # end = list(input("Enter end (no space comma separated:)"))
+    # end[0], end[1] = end[1], end[0]
+
+    # path = robot.bfs(start, end)
+    # for i in range(len(path)):
+    #     path[i] = list(reversed(path[i]))
+    # print(path)
+#code
+    # for i in range(len(path) - 1):
+    #     start_coord, end_coord = path[i], path[i+1]
+        
+    #     if (start_coord[0][])
+    #     # horizontal compress
+    #     for j in range(i + 1, len(path))
+    #         if (path[j][0] != start_coord[0]):
+    #             break
+    #         else:
+    #             end_coord = path[j]
+    #     start_coord, end_coord = path[i], path[i+1]
+
+    #     print("moving from: " + str(start_coord) + " to " + str(end_coord))
+    #     robot.move_to_grid(start_coord, end_coord)
+    #     robot.stop_wheels()
+
+#code
+    # for i in range(len(path) - 1):
+    #     start_coord, end_coord = path[i], path[i+1]
+
+    #     print("moving from: " + str(start_coord) + " to " + str(end_coord))
+    #     print(robot.position[2])
+    #     robot.move_to_grid(start_coord, end_coord)
+    #     robot.stop_wheels()
+    #     print("finished moving to: " + str(end_coord))
+
+    robot.test2()
     # control loop running at 10hz
     r = rospy.Rate(10) # 10hz
     while not rospy.is_shutdown():
