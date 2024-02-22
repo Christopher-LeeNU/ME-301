@@ -132,7 +132,7 @@ class Robot:
             "left wheel": 6,
             "motor sensor": 8}
 
-        self.port = 4
+        self.port = 3
         self.sensor_scale = float(15.0/2350)
         self.all_sides = ["left", "front", "right"]
 
@@ -143,7 +143,19 @@ class Robot:
         self.map = EECSMap()
         self.grid_time = 3 # at speed = 900, takes 3 sec to travel 30 cm
 
-        self.sensor_side = "right"
+        self.maze = EECSMap()
+        self.maze.clearObstacleMap()
+        self.maze_list = defaultdict(list)
+        self.convert_direction = {
+            0: 3,
+            1: 4,
+            2: 1,
+            3: 2
+        }
+
+        self.maze_visited = {(0,0)}
+
+
 
 
 
@@ -151,6 +163,7 @@ class Robot:
         setMotorMode(self.ID["right wheel"], 1)
         setMotorMode(self.ID["left wheel"], 1)
         setMotorTargetSpeed(self.ID["motor sensor"], 300)
+        self.move_to(512)
 
     def stop_wheels(self):
         ids = [self.ID["right wheel"], self.ID["left wheel"]]
@@ -303,16 +316,100 @@ class Robot:
         
         self.adjacency_list = adjacency_list
 
-    def get_reading(self, side):
-        self.sensor_side = side
-        if (side == "front"):
-            self.move_to(0)
-        elif (side == "right"):
-            self.move_to(512)
-        else:
-            self.move_to(1023)
-        time.sleep(0.5)
-        return getSensorValue(self.port)
+    def get_reading(self):
+        self.move_to(820)
+        time.sleep(1)
+        left = 0
+        for i in range(10):
+            left += getSensorValue(self.port)
+        self.move_to(512)
+        time.sleep(1)
+        front = 0
+        for i in range(10):
+            front += getSensorValue(self.port)
+        self.move_to(200)
+        time.sleep(1)
+        right = 0
+        for i in range(10):
+            right += getSensorValue(self.port)
+        self.move_to(512)
+        return (left//10, front//10, right//10)
+
+
+
+    def wander(self):
+
+        next_pos = None
+
+        THRESHOLD = 5
+        
+        curr_x, curr_y, heading = self.position[0], self.position[1], self.position[2]
+
+        readings = self.get_reading()
+        dir_left = heading - 1
+        dir_front = heading
+        dir_right = heading + 1
+
+        # left, front, right
+        dirs = [dir_left, dir_front, dir_right]
+        grids = None
+
+        if heading == 0:
+            grids = [(curr_x + 1, curr_y), (curr_x, curr_y + 1), (curr_x - 1, curr_y)]
+        elif heading == 1:
+            grids = [(curr_x, curr_y - 1), (curr_x + 1, curr_y), (curr_x, curr_y + 1)]
+        elif heading == 2:
+            grids = [(curr_x - 1, curr_y ), (curr_x, curr_y - 1), (curr_x + 1, curr_y)]
+        elif heading == 3:
+            grids = [(curr_x, curr_y + 1), (curr_x - 1, curr_y), (curr_x, curr_y - 1)]
+
+
+        def is_valid(i, j):
+            return 0 <= i < 8 and 0 <= j < 8
+
+
+        for i in range(len(dirs)):
+            if (dirs[i] < 0):
+                dirs[i] = 3
+            elif (dirs[i] > 3):
+                dirs[i] = 0
+        
+        for i in range(len(dirs)):
+            dirs[i] = self.convert_direction[dirs[i]]
+
+        
+        for i in range(3):
+            print(readings[i])
+            print(readings[i] * 15 / 2350)
+            reading, direction, grid = readings[i], dirs[i], grids[i]
+            if (reading * 15 / 2350 < THRESHOLD):
+                if (is_valid(grid[0], grid[1])):
+                    # we will always pick the first available position to go to as the next position
+                    if not (next_pos):
+                        if (next_pos not in self.maze_visited):
+                            next_pos = grid
+            else:
+                print("set grid to blocked")
+                print("{}, {}".format(grid[0], grid[1]))
+                if (is_valid(grid[0], grid[1])):
+                    self.maze.setObstacle(grid[1], grid[0] + 1, True, direction)
+
+        # need to account for cases where we can't move to an adjacent cell
+        if not next_pos:
+            print("could not find next position")
+            pass
+        
+        return next_pos
+    
+        
+
+
+
+
+
+
+
+
 
     # def nearest_wall(self):
     #     shortest = 12232
@@ -391,8 +488,12 @@ class Robot:
         self.move_forward_by(900, 1)
         self.move_forward_by(900, 1)
 
-
-
+    def test3(self):
+        self.move_forward_by(900, 1)
+        self.move_forward_by(900, 1)
+        self.left_turn(90, 900)
+        self.move_forward_by(900, 1)
+        self.move_forward_by(900, 1)
 
     
 
@@ -402,7 +503,7 @@ if __name__ == "__main__":
     rospy.loginfo("Starting Group X Control Node...")
     robot = Robot()
     robot.default_config()
-    robot.map.printObstacleMap()
+    #robot.map.printObstacleMap()
     # robot.map.printCostMap()
     robot.create_adjacency_list()
     # print(robot.bfs([0,0,0], [7,5,0]))
@@ -459,15 +560,22 @@ if __name__ == "__main__":
     #     robot.stop_wheels()
     #     print("finished moving to: " + str(end_coord))
 
-    robot.test2()
+    #print(robot.get_reading())
     # control loop running at 10hz
     r = rospy.Rate(10) # 10hz
+    curr_pos = (0,0)
     while not rospy.is_shutdown():
         # call function to get sensor value
-        port = 5
-        sensor_reading = getSensorValue(port)
-        rospy.loginfo("Sensor value at port %d: %f", 5, sensor_reading)
 
-
+        next_pos = robot.wander()
+        print("going to move to")
+        print(next_pos)
+        # next_pos = next_pos[::-1]
+        robot.maze_visited.add(next_pos)
+        robot.move_to_grid(curr_pos, next_pos)
+        curr_pos = next_pos
+        robot.position[0] = curr_pos[0]
+        robot.position[1] = curr_pos[1]
+        robot.maze.printObstacleMap()
         # sleep to enforce loop rate
         r.sleep()
